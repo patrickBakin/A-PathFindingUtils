@@ -16,6 +16,7 @@ public:
 		this->window = new sf::RenderWindow(sf::VideoMode(1024, 720), "PathFindingUtils", sf::Style::Titlebar | sf::Style::Close);
 		this->window->setFramerateLimit(60);
 	}
+	GG(bool noGui) {  };
 	void MainWindow();
 	
 
@@ -76,6 +77,10 @@ public:
 	int NumNodeX;
 	int NumNodeY;
 
+	AStar() : GG(false) {};
+	
+	AStar(bool GUI) : GG() {};
+	
 	void InitAStar(int NumNodeX, int NumNodeY, int NodeStartX, int NodeStartY, int NodeEndX, int NodeEndY) //asd
 	{
 		this->NumNodeX = NumNodeX;
@@ -109,7 +114,7 @@ public:
 				}
 			}
 		}
-
+		/******************************
 		for (int i = 0; i <= 50; i++)
 		{
 			GenerateSquareObstacle(3);
@@ -118,7 +123,7 @@ public:
 			GenerateAnObstacle();
 			//GenerateSquareObstacle(2);
 		}
-		
+		********************************/
 
 		//create connections NodeNeighBours
 		for (int x = 0; x < NumNodeX; x++)
@@ -141,7 +146,12 @@ public:
 
 
 	}
-
+	bool SetObstacleNodes(int x,int y)
+	{
+		nodes[y * NumNodeX + x].bObstacle = true;
+		nodes[y * NumNodeX + x].nodetype = OBST_NODE;
+		return true;
+	}
 	bool GenerateAnObstacle()
 	{	
 		//srand(time(0));
@@ -165,7 +175,8 @@ public:
 		{
 			for (int x = numX; x <= numX + SizeN; x++)
 			{	
-				if (x > NumNodeX || y>NumNodeY) continue;
+				if (x >= NumNodeX || y>=NumNodeY) continue;
+				std::cout << x << " " << y << std::endl;
 				if (nodes[y * NumNodeX + x].nodetype == START_NODE || nodes[y * NumNodeX + x].nodetype == END_NODE) continue;
 				nodes[y * NumNodeX + x].bObstacle = true;
 				nodes[y * NumNodeX + x].nodetype = OBST_NODE;
