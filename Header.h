@@ -8,16 +8,17 @@
 #include <SFML/Network.hpp>
 
 #include<cstdlib>
+
 class GG
 {
 public:
 	GG()
 	{
-		this->window = new sf::RenderWindow(sf::VideoMode(1024, 720), "PathFindingUtils", sf::Style::Titlebar | sf::Style::Close);
+		this->window = new sf::RenderWindow(sf::VideoMode(1920, 1080), "PathFindingUtils", sf::Style::Titlebar | sf::Style::Close);
 		this->window->setFramerateLimit(60);
 	}
 	GG(bool noGui) {  };
-	void MainWindow();
+	
 	
 
 	virtual ~GG()
@@ -26,11 +27,11 @@ public:
 		delete this->window;
 	}
 
+	
+
 protected:
-	virtual void DrawNodes(bool DrawPath) =0;
-	//virtual void DrawPath() = 0;
-	virtual bool ChangeDestination(sf::Keyboard::Key key) =0;
-	virtual bool Solve_AStar() = 0;
+
+	virtual void MainWindow();
 	sf::RenderWindow* window;
 	sf::Event ev;
 };
@@ -77,281 +78,42 @@ public:
 	int NumNodeX;
 	int NumNodeY;
 
+	void MainWindow() override;
 	AStar() : GG(false) {};
 	
-	AStar(bool GUI) : GG() {};
+
+	void GenerateMapObstacles();
+	AStar(int NumNodeX, int NumNodeY, int NodeStartX, int NodeStartY, int NodeEndX, int NodeEndY) : GG()
+	{
 	
-	void InitAStar(int NumNodeX, int NumNodeY, int NodeStartX, int NodeStartY, int NodeEndX, int NodeEndY) //asd
-	{
-		this->NumNodeX = NumNodeX;
-		this->NumNodeY = NumNodeY;
-		nodes = new Node[NumNodeX * NumNodeY];
-
-		//Initialize Nodes
-		for (int x = 0; x < NumNodeX; x++)
-		{
-			for (int y = 0; y < NumNodeY; y++)
-			{
-				nodes[y * NumNodeX + x].x = x; // ...because we give each node its own coordinates
-				nodes[y * NumNodeX + x].y = y;
-				nodes[y * NumNodeX + x].bObstacle = false;
-				nodes[y * NumNodeX + x].parent = nullptr;
-				nodes[y * NumNodeX + x].bVisited = false;
-
-				
-
-				if (x == NodeStartX && y == NodeStartY)
-				{
-					nodes[y * NumNodeX + x].nodetype = START_NODE;
-					
-					this->nodeStart = &nodes[y * NumNodeX + x];
-				}
-				else if (x == NodeEndX && y == NodeEndY)
-				{
-					nodes[y * NumNodeX + x].nodetype = END_NODE;
-					
-					this->nodeEnd = &nodes[y * NumNodeX + x];
-				}
-			}
-		}
-		/******************************
-		for (int i = 0; i <= 50; i++)
-		{
-			GenerateSquareObstacle(3);
-			GenerateAnObstacle();
-			GenerateAnObstacle();
-			GenerateAnObstacle();
-			//GenerateSquareObstacle(2);
-		}
-		********************************/
-
-		//create connections NodeNeighBours
-		for (int x = 0; x < NumNodeX; x++)
-			for (int y = 0; y < NumNodeY; y++)
-			{
-				if (y > 0)
-					nodes[y * NumNodeX + x].NodeNeighbours.push_back(&nodes[(y - 1) * NumNodeX + (x + 0)]);
-				if (y < NumNodeY - 1)
-					nodes[y * NumNodeX + x].NodeNeighbours.push_back(&nodes[(y + 1) * NumNodeX + (x + 0)]);
-				if (x > 0)
-
-					nodes[y * NumNodeX + x].NodeNeighbours.push_back(&nodes[(y + 0) * NumNodeX + (x - 1)]);
-
-				if (x < NumNodeX - 1)
-
-					nodes[y * NumNodeX + x].NodeNeighbours.push_back(&nodes[(y + 0) * NumNodeX + (x + 1)]);
-
-
-			}
-
-
-	}
-	bool SetObstacleNodes(int x,int y)
-	{
-		nodes[y * NumNodeX + x].bObstacle = true;
-		nodes[y * NumNodeX + x].nodetype = OBST_NODE;
-		return true;
-	}
-	bool GenerateAnObstacle()
-	{	
-		//srand(time(0));
-		int rangeX= NumNodeX - 2+ 1, rangeY = NumNodeY - 2 + 1;
-		int numX = rand() % rangeX ,numY = rand() % rangeY ;
-			
-		if (nodes[numY * NumNodeX + numX].nodetype == START_NODE || nodes[numY * NumNodeX + numX].nodetype == END_NODE) return false;
-			nodes[numY * NumNodeX + numX].bObstacle = true;
-			nodes[numY * NumNodeX + numX].nodetype = OBST_NODE;
-			return true;
-	}
-
-	bool GenerateSquareObstacle(int SizeN)
-	{	
-		//srand(time(0));
-		int rangeX = NumNodeX - 2 + 1, rangeY = NumNodeY - 2 + 1;
-		int numX = rand() % (rangeX) , numY = rand() % (rangeY) ;
-
+		InitAStar(NumNodeX, NumNodeY, NodeStartX, NodeStartY, NodeEndX, NodeEndY);
+		GenerateMapObstacles();
+		MainWindow();
 		
-		for(int y = numY; y <= numY + SizeN; y++)
-		{
-			for (int x = numX; x <= numX + SizeN; x++)
-			{	
-				if (x >= NumNodeX || y>=NumNodeY) continue;
-				std::cout << x << " " << y << std::endl;
-				if (nodes[y * NumNodeX + x].nodetype == START_NODE || nodes[y * NumNodeX + x].nodetype == END_NODE) continue;
-				nodes[y * NumNodeX + x].bObstacle = true;
-				nodes[y * NumNodeX + x].nodetype = OBST_NODE;
-			}
+	};
 
-		}
-		
-		return true;
-	}
-	float GetGlobalDistance(Node* nodeA, Node* nodeB)
-	{
-		return sqrtf((nodeA->x - nodeB->x) * (nodeA->x - nodeB->x) + (nodeA->y - nodeB->y) * (nodeA->y - nodeB->y));
-	}
-	bool Solve_AStar() override
-	{	
-		ResetAllNodes();
-		Node* CurrentNode = nodeStart;
-		nodeStart->fLocalGoal = 0.0f;
-		nodeStart->fGlobalGoal = GetGlobalDistance(nodeStart, nodeEnd);
-		std::vector<Node*> NodesToTestList;
+	void InitAStar(int NumNodeX, int NumNodeY, int NodeStartX, int NodeStartY, int NodeEndX, int NodeEndY); //asd
 
+	bool SetObstacleNodes(int x, int y);
 
-		
-		NodesToTestList.push_back(nodeStart);
+	bool GenerateAnObstacle();
 
-		while (!NodesToTestList.empty() && CurrentNode != nodeEnd)
-		{
-			std::sort(NodesToTestList.begin(), 
-				NodesToTestList.end(), 
-				[](const Node* lhs, Node* rhs) 
-				{return lhs->fGlobalGoal < rhs->fGlobalGoal; });
+	bool GenerateSquareObstacle(int SizeN);
 
-			while (!NodesToTestList.empty() && NodesToTestList.front()->bVisited)
-
-			{
-				NodesToTestList.erase(NodesToTestList.begin());
-			}
-			if (NodesToTestList.empty())
-			{
-				break;
-			}
-			CurrentNode = NodesToTestList.front();
-			CurrentNode->bVisited = true;
-
-			for (auto nodeNeighbour : CurrentNode->NodeNeighbours)
-			{
-
-				if (!nodeNeighbour->bVisited && nodeNeighbour->bObstacle == 0)
-					NodesToTestList.push_back(nodeNeighbour);
-
-
-				float fPossiblyLowerGoal = CurrentNode->fLocalGoal + GetGlobalDistance(CurrentNode, nodeNeighbour);
-
-				if (fPossiblyLowerGoal < nodeNeighbour->fLocalGoal)
-				{
-					nodeNeighbour->parent = CurrentNode;
-					nodeNeighbour->fLocalGoal = fPossiblyLowerGoal;
-
-					nodeNeighbour->fGlobalGoal = nodeNeighbour->fLocalGoal + GetGlobalDistance(nodeNeighbour, nodeEnd);
-				}
-			}
-		}
-
-		
-		return nodeEnd->parent != nullptr;
-		
-	}
+	float GetGlobalDistance(Node* nodeA, Node* nodeB);
+	
+	bool Solve_AStar();
+	
 
 	
-	void DrawNodes(bool DrawPath) override
-	{	
-		float Radius=2;
-		float X=0, Y=0;
-		float Dx = (1024 - NumNodeX * Radius) / (NumNodeX + 1);
-		float Dy = (1024 - NumNodeY * Radius) / (NumNodeY + 1);
-		for (int x = 0; x < NumNodeX; x++)
-		{
-			for (int y = 0; y < NumNodeY; y++)
-			{
-				X += Dx;
-				(this->nodes)[y * NumNodeX + x].aNode.setPosition(X, Y);
-				(this->nodes)[y * NumNodeX + x].PosX = (this->nodes)[y * NumNodeX + x].aNode.getPosition().x;
-				(this->nodes)[y * NumNodeX + x].PosY = (this->nodes)[y * NumNodeX + x].aNode.getPosition().y;
-				(this->nodes)[y * NumNodeX + x].aNode.setRadius(Radius);
+	void DrawNodes(bool DrawPath);
+	
+	bool ChangeDestination(sf::Keyboard::Key key);
+	
+	bool IsInPath(Node* Node1, Node* Node2);
 
-				switch ((this->nodes)[y * NumNodeX + x].nodetype)
-				{
-				case START_NODE:
-					(this->nodes)[y * NumNodeX + x].aNode.setFillColor(sf::Color::Yellow);
-					break;
-				case END_NODE:
-					(this->nodes)[y * NumNodeX + x].aNode.setFillColor(sf::Color::Green);
-					break;
-				case OBST_NODE:
-					(this->nodes)[y * NumNodeX + x].aNode.setFillColor(sf::Color::Red);
-					break;
-				case JUST_NODE:
-					(this->nodes)[y * NumNodeX + x].aNode.setFillColor(sf::Color::Blue);
-					break;
-				default:
-					break;
-				}
-				
-				if (DrawPath)
-				{
-					if (IsInPath(&(this->nodes)[y * NumNodeX + x], this->nodeEnd))
-					{	
-						
-						(this->nodes)[y * NumNodeX + x].aNode.setFillColor(sf::Color::White);
-					}
-				}
-				this->window->draw((this->nodes)[y * NumNodeX + x].aNode);
-			}
-			Y += Dy;
-			X = 0;
-		}
-		
-		
-	}
-	bool ChangeDestination(sf::Keyboard::Key key) override
-	{	
-		switch (key)
-		{
-		case sf::Keyboard::Up:
-			if (!(nodeEnd->x <= 0 || nodes[(nodeEnd->y) * NumNodeX + nodeEnd->x - 1].bObstacle))
-			{
-				nodeEnd->nodetype = JUST_NODE;
-				nodeEnd = &nodes[(nodeEnd->y) * NumNodeX + nodeEnd->x-1];
-				nodeEnd->nodetype = END_NODE;
-			}
-			break;
-		case sf::Keyboard::Down:
-			if (!(nodeEnd->x >= NumNodeY-1 || nodes[(nodeEnd->y) * NumNodeX + nodeEnd->x + 1].bObstacle))
-			{	
-				nodeEnd->nodetype = JUST_NODE;
-				nodeEnd = &nodes[(nodeEnd->y) * NumNodeX + nodeEnd->x+1];
-				nodeEnd->nodetype = END_NODE;
-			}
-			break;
-		case sf::Keyboard::Left:
-			if (!(nodeEnd->y <= 0 || nodes[(nodeEnd->y - 1) * NumNodeX + nodeEnd->x].bObstacle))
-			{	
-				nodeEnd->nodetype = JUST_NODE;
-				nodeEnd = &nodes[(nodeEnd->y-1) * NumNodeX + nodeEnd->x ];
-				nodeEnd->nodetype = END_NODE;
-			}
-			break;
-		case sf::Keyboard::Right:
-			if (!(nodeEnd->y >= NumNodeY-1 || nodes[(nodeEnd->y + 1) * NumNodeX + nodeEnd->x].bObstacle))
-			{	
-				nodeEnd->nodetype = JUST_NODE;
-				nodeEnd = &nodes[(nodeEnd->y+1) * NumNodeX + nodeEnd->x ];
-				nodeEnd->nodetype = END_NODE;
-			}
-			break;
-		default:
-			break;
-		}
-		return Solve_AStar();
-		//return true;
-	}
-	bool IsInPath(Node* Node1,Node* Node2)
-	{	
-		Node* parent = Node2;
-		while(parent->parent !=nullptr)
-		{	
-			if (Node1 == parent && Node1!=Node2)
-			{
-				return true;
-			}
-			parent = parent->parent;
-		}
-		
-		return false;
-	}
+	void ReGenObstacles();
+
 	
 
 	~AStar() override
@@ -362,21 +124,8 @@ public:
 
 
 private:
-	void ResetAllNodes()
-	{
-		for (int x = 0; x < NumNodeX; x++)
-		{
-			for (int y = 0; y < NumNodeY; y++)
-			{
-				nodes[y * NumNodeX + x].bVisited = false;
-				nodes[y * NumNodeX + x].fGlobalGoal = INFINITY;
-				nodes[y * NumNodeX + x].fLocalGoal = INFINITY;
-				nodes[y * NumNodeX + x].parent = nullptr;	// No parents
+	void ResetAllNodes();
 
-				
-			}
-		}
-	}
 	void EndGame()
 	{
 		delete[] this->nodes;
