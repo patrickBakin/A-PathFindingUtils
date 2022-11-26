@@ -13,13 +13,83 @@
 
 using namespace cv;
 
+struct Coor
+{	
+	bool CoorValid=false;
+	struct Startpoint
+	{
+		int x=0;
+		int y=0;
+	} Start;
+	struct Endpoint
+	{
+		int x=0;
+		int y=0;
+	} End;
+};
 
+Coor getStartEndPoint(Mat& image)
+{	
+	Coor PointCoor;
+	
+	Mat getRedImage;
+	inRange(image, Scalar(10, 10, 100), Scalar(100, 100, 255), getRedImage);
+	int nonZero = countNonZero(getRedImage);
+	if (nonZero <= 0)
+	{
+		printf("The Image doesn't contain a start point.\n");
+		
+		return PointCoor;
+	}
+	Mat RednonZeroCoordinates;
+	findNonZero(getRedImage, RednonZeroCoordinates);
+	int i;
+	for (i = 0; i < RednonZeroCoordinates.total(); i++) {
+		//std::cout << "Zero#" << i << ": " << nonZeroCoordinates.at<Point>(i).x << ", " << nonZeroCoordinates.at<Point>(i).y << endl;
+		break;
+	}
+
+
+	Mat getBlueImage;
+
+	inRange(image, Scalar(100, 0, 0), Scalar(255, 80, 80), getBlueImage);
+	nonZero = countNonZero(getBlueImage);
+	if (nonZero <= 0)
+	{
+		printf("The Image doesn't contain an End point.\n");
+		return PointCoor;
+		
+	}
+	Mat BluenonZeroCoordinates;
+	findNonZero(getBlueImage, BluenonZeroCoordinates);
+	int j;
+	for (j = 0; j < BluenonZeroCoordinates.total(); j++) {
+		//std::cout << "Zero#" << i << ": " << nonZeroCoordinates.at<Point>(i).x << ", " << nonZeroCoordinates.at<Point>(i).y << endl;
+		break;
+	}
+
+	PointCoor.CoorValid = true;
+	PointCoor.Start.x = RednonZeroCoordinates.at<Point>(i).x;
+	PointCoor.Start.y = RednonZeroCoordinates.at<Point>(i).y;
+	PointCoor.End.x = BluenonZeroCoordinates.at<Point>(j).x;
+	PointCoor.End.y = BluenonZeroCoordinates.at<Point>(j).y;
+	
+	return PointCoor;
+
+}
 int main(int argc,char** argv)
 {	
+	
 	std::string UserInput="";
 	while ( true)
 	{	
-	
+		std::cout << R"(
+  ___      _   _    ___ _         _ _             _   _ _   _ _    
+ | _ \__ _| |_| |_ | __(_)_ _  __| (_)_ _  __ _  | | | | |_(_) |___
+ |  _/ _` |  _| ' \| _|| | ' \/ _` | | ' \/ _` | | |_| |  _| | (_-<
+ |_| \__,_|\__|_||_|_| |_|_||_\__,_|_|_||_\__, |  \___/ \__|_|_/__/
+                                          |___/                    
+)";
 		std::cout << "PathFindingUtils v1.0" << std::endl;
 		std::cout << "Visualize Pathfinding or Solve Maze? (1/2) " << std::endl;
 		std::cin >> UserInput;
@@ -42,15 +112,21 @@ int main(int argc,char** argv)
 			if (!image.data)
 			{
 				printf("No image data \n");
-				return 0;
+				continue;
 			}
-
+			Coor StartEndCoor = getStartEndPoint(image);
+			if (!StartEndCoor.CoorValid)
+			{
+				printf("Start or End Spot Position is not valid\n");
+				continue;
+			}
 			Mat gray_image;
 			resize(image, gray_image, cv::Size(image.cols * 1, image.rows * 1), 0, 0, INTER_LINEAR);
 			cvtColor(gray_image, gray_image, COLOR_BGR2GRAY);
 
 			AStar AS;
-			AS.InitAStar(gray_image.rows, gray_image.cols, 1597, 809, 9, 793);
+			printf("%d %d %d %d\n", StartEndCoor.Start.y, StartEndCoor.Start.x, StartEndCoor.End.y, StartEndCoor.End.x);
+			AS.InitAStar(gray_image.rows, gray_image.cols, StartEndCoor.End.y, StartEndCoor.End.x, StartEndCoor.Start.y, StartEndCoor.Start.x);
 			std::cout <<"ImageSize: " << gray_image.rows << "x" << gray_image.cols << std::endl;
 			std::cout << "Projecting Nodes to image..." << std::endl;
 			for (int i = 0; i < gray_image.rows; i++)
@@ -77,7 +153,11 @@ int main(int argc,char** argv)
 				CurrentNode = CurrentNode->parent;
 			}
 			imwrite("result.jpg", image);
+
 			std::cout << "Saved as result.jpg" << std::endl;
+			imshow("result", image);
+			waitKey(0);
+			
 		}
 		else
 		{
