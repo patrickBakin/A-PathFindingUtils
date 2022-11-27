@@ -185,7 +185,7 @@ bool AStar::Solve_AStar()
 		CurrentNode = NodesToTestList.front();
 		CurrentNode->bVisited = true;
 
-		for (auto nodeNeighbour : CurrentNode->NodeNeighbours)
+		for (auto& nodeNeighbour : CurrentNode->NodeNeighbours)
 		{
 
 			if (!nodeNeighbour->bVisited && nodeNeighbour->bObstacle == 0)
