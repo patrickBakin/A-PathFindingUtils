@@ -11,7 +11,9 @@
 #include <opencv2/opencv.hpp>
 
 
+
 using namespace cv;
+
 enum TileType
 {
 	START,
@@ -134,9 +136,60 @@ TileType StartOrEndTile(Mat& tile)
 	
 	
 }
+bool FindCircle(Mat& FullImage,int* StartX,int* StartY,int* EndX,int* EndY,int minDst)
+{	
+	std::vector<Vec3f> circles;
+	HoughCircles(FullImage, circles, HOUGH_GRADIENT, 1.25, FullImage.rows/4, 105,33, 5,40);
+	int i=0;
+	sort(circles.begin(), circles.end(), [](const Vec3f& lhs, const Vec3f& rhs) {return cvRound(lhs[2]) > cvRound(rhs[2]); });
+	
+	for (i=0; i < 2; i++)
+	{	
+		
+		std::cout << "Circle Detected!" << std::endl;
+		Point center(cvRound(circles[i][0]), cvRound(circles[i][1]));
+		int radius = cvRound(circles[i][2]);
+		if (i == 0)
+		{
+			*StartX = center.x+radius;
+			*StartY = center.y;
+		}
+		if (i == 1)
+		{
+			*EndX = center.x+radius;
+			*EndY = center.y;
+		}
+
+		circle(FullImage, center, 3, Scalar(0, 255, 0), -1, 8, 0);
+
+		circle(FullImage, center, radius, Scalar(255, 0, 255), 3, 8, 0);
+
+		
+	}
+#ifdef DEBUG
+	imshow("Hough Circle Transform Demo", FullImage);
+	line(FullImage, Point(0, 288), Point(1024, 288), Scalar(225, 220, 225), 2, 8);
+	// middle line
+	line(FullImage, Point(360, 0), Point(360, 576), Scalar(225, 220, 225), 2, 8);
+	//break cans into 4 by 4
+	line(FullImage, Point(600, 0), Point(600, 576), Scalar(225, 220, 225), 2, 8);
+	//      x, y  
+
+	imshow("Lines", FullImage);
+	imwrite("lineoutput.jpg", FullImage);
 
 
-ImageMap PartitionImage(cv::Mat& image, int M, int N)
+	waitKey(0);
+#endif // DEBUG
+	//  namedWindow("Hough Circle Transform Demo", CV_WINDOW_NORMAL);
+	
+	return i > 0;
+}
+bool CheckCircleInTile(int CircleX, int CircleY,int RectX,int RectY,int TileSizeX,int TileSizeY)
+{
+	return sqrtf((CircleY - RectY) * (CircleY - RectY) + (CircleX - RectX) * (CircleX - RectX)) <= sqrtf(TileSizeX * TileSizeX + TileSizeY * TileSizeY) / 2;
+}
+ImageMap PartitionImage(cv::Mat& image, int M, int N,int StartX,int StartY,int EndX,int EndY)
 {
 	// All images should be the same size ...
 	int width = image.cols / M;
@@ -165,11 +218,12 @@ ImageMap PartitionImage(cv::Mat& image, int M, int N)
 			/*namedWindow("Display", WINDOW_NORMAL);
 			imshow("Display", RectImage);
 			waitKey(0);*/
-			TileType StartEndTile = StartOrEndTile(RectImage);
-			if (StartEndTile==START)
+			//TileType StartEndTile = StartOrEndTile(RectImage);
+			
+			if (CheckCircleInTile(StartX, StartY, get_rect_center(roi).x, get_rect_center(roi).y, width, height) && !IM.StartEndTile[0].CoorValid)
 			{	
 				
-
+				std::cout << "here" << std::endl;
 				IM.StartEndTile[0].CoorValid = true;
 				IM.StartEndTile[0].Type = START;
 				IM.StartEndTile[0].Positionx = get_rect_center(roi).x;
@@ -180,10 +234,10 @@ ImageMap PartitionImage(cv::Mat& image, int M, int N)
 				
 
 			}
-			else if (StartEndTile == END)
+			else if (CheckCircleInTile(EndX, EndY, get_rect_center(roi).x, get_rect_center(roi).y, width,height) && !IM.StartEndTile[1].CoorValid)
 			{
 
-
+				std::cout << "here11" << std::endl;
 				IM.StartEndTile[1].CoorValid = true;
 				IM.StartEndTile[1].Type = END;
 				IM.StartEndTile[1].Positionx = get_rect_center(roi).x;
@@ -198,7 +252,7 @@ ImageMap PartitionImage(cv::Mat& image, int M, int N)
 			{
 				Mat RectImageM;
 
-				inRange(RectImage, Scalar(0, 0, 0), Scalar(105, 105, 105), RectImageM);
+				inRange(RectImage, Scalar(0, 0, 0), Scalar(50, 50, 50), RectImageM);
 				if (countNonZero(RectImageM) > 0)
 				{
 					Tile tile;
@@ -222,7 +276,44 @@ ImageMap PartitionImage(cv::Mat& image, int M, int N)
 	
 }
 
+void RemoveShadow(Mat* image)
+{	
+	
+	Mat* rgb_planes = new Mat[image->channels()];
+	split(*image, rgb_planes);
+	std::vector<Mat> result_planes,result_norm_planes;
+	for (int i=0;i<image->channels(); i++)
+	{	
+		Mat* plane = &rgb_planes[i];
+		Mat dilated_img;
+		
+		dilate(*plane, dilated_img, Mat(), Point(-1, -1), 2, 1, 1);
+		
+		
+		Mat bg_img;
+		medianBlur(dilated_img,bg_img ,21);
+		Mat diff_img;
+		absdiff(*plane, bg_img, diff_img);
+		diff_img = 255 - diff_img;
+		Mat norm_img;
+		normalize(diff_img, norm_img, 0, 255, NORM_MINMAX, CV_8UC1);
+		result_planes.push_back(diff_img);
+		result_norm_planes.push_back(norm_img);
+	}
+	Mat result;
+	Mat result_norm;
+	merge(result_planes, result);
+	merge(result_norm_planes, result_norm);
+	delete[] rgb_planes;
+#ifdef DEBUG
+	cv::imshow("shawdows_out_norm.png", result_norm);
+	cv::waitKey(0);
 
+	
+#endif // DEBUG
+	* image = result_norm;
+	//return result_norm;
+}
 int main(int argc,char** argv)
 {	
 	
@@ -254,6 +345,7 @@ int main(int argc,char** argv)
 			std::cin >> UserInputImage;
 			const char* ImageName = UserInputImage.c_str();//argv[1];
 			Mat image;
+			Mat imageClone;
 			int Paththreshold = 4;
 			image = imread(ImageName, IMREAD_COLOR);
 			{
@@ -262,19 +354,44 @@ int main(int argc,char** argv)
 					printf("No image data \n");
 					continue;
 				}
-
-				ImageMap IM = PartitionImage(image, image.cols / Paththreshold, image.rows / Paththreshold);
+				imageClone = image.clone();
+				RemoveShadow(&image);
+				
+				Mat gray_image;
+				
+				resize(image, gray_image, cv::Size(image.cols * 1, image.rows * 1), 0, 0, INTER_LINEAR);
+				cvtColor(gray_image, gray_image, COLOR_BGR2GRAY);
+				int StartX, StartY, EndX, EndY;
+				
+				if (!FindCircle(gray_image, &StartX, &StartY, &EndX, &EndY, image.rows / Paththreshold))
+				{
+					std::cout << "Circle Not Found" << std::endl;
+					continue;
+				}
+				gray_image = gray_image > 200;
+#ifdef DEBUG
+				imshow("gray", gray_image);
+				waitKey(0);
+#endif // DEBUG
+				
+				
+				
+				//continue;
+				ImageMap IM = PartitionImage(gray_image, image.cols / Paththreshold, image.rows / Paththreshold,StartX,StartY,EndX,EndY);
 				if (!IM.StartEndTile[0].CoorValid || !IM.StartEndTile[1].CoorValid)
 				{
 					std::cout << " Can't find Start or End point" << std::endl;
 					continue;
 				}
-				Mat gray_image;
-				resize(image, gray_image, cv::Size(image.cols * 1, image.rows * 1), 0, 0, INTER_LINEAR);
-				cvtColor(gray_image, gray_image, COLOR_BGR2GRAY);
-
+				//threshold(gray_image, gray_image, 128, 255, THRESH_BINARY);
+#ifdef DEBUG
+				imshow("Binary", gray_image);
+				waitKey(0);
+#endif // DEBUG
+				
+				//continue;
 				AStar AS;
-				//printf("%d %d %d %d\n", StartEndCoor.Start.y, StartEndCoor.Start.x, StartEndCoor.End.y, StartEndCoor.End.x);
+				
 				AS.InitAStar(IM.Height, IM.width, IM.StartEndTile[1].TileY, IM.StartEndTile[1].TileX, IM.StartEndTile[0].TileY, IM.StartEndTile[0].TileX);
 				
 				std::cout << "Projecting Nodes to image..." << std::endl;
@@ -299,7 +416,7 @@ int main(int argc,char** argv)
 					Point p(CurrentNode->y * Paththreshold, CurrentNode->x * Paththreshold);
 					if (tempPoint.x != -1 && tempPoint.y != -1)
 					{
-						line(image, tempPoint, p, Scalar(0, 0, 255), 2, LINE_AA);
+						line(imageClone, tempPoint, p, Scalar(0, 0, 255), 2, LINE_AA);
 					}
 					//image.at<Vec3b>(CurrentNode->x * Paththreshold, CurrentNode->y * Paththreshold) = Vec3b(0, 0, 255);
 					CurrentNode = CurrentNode->parent;
@@ -308,10 +425,11 @@ int main(int argc,char** argv)
 				}
 
 			}
-			imwrite("result.jpg", image);
+			imwrite("result.jpg", imageClone);
 
 			std::cout << "Saved as result.jpg" << std::endl;
-			imshow("result", image);
+			namedWindow("Display", WINDOW_AUTOSIZE);
+			imshow("Display", imageClone);
 			waitKey(0);
 			
 		}

@@ -170,7 +170,7 @@ bool AStar::Solve_AStar()
 	{
 		std::sort(NodesToTestList.begin(),
 			NodesToTestList.end(),
-			[](const Node* lhs, Node* rhs)
+			[](const Node* lhs, const Node* rhs)
 			{return lhs->fGlobalGoal < rhs->fGlobalGoal; });
 
 		while (!NodesToTestList.empty() && NodesToTestList.front()->bVisited)
