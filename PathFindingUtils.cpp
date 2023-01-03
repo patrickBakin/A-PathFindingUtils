@@ -8,10 +8,10 @@
 #include <algorithm>
 #include <stdlib.h>
 #include "Header.h"
+
 #include <opencv2/opencv.hpp>
 
-
-
+//#define DEBUG
 using namespace cv;
 
 enum TileType
@@ -22,6 +22,7 @@ enum TileType
 	NONE
 
 };
+
 struct Tile
 {	
 	bool CoorValid=false;
@@ -31,6 +32,7 @@ struct Tile
 	int TileY;
 	TileType Type= NONE;
 };
+
 struct ImageMap
 {
 	int width;
@@ -139,10 +141,14 @@ TileType StartOrEndTile(Mat& tile)
 bool FindCircle(Mat& FullImage,int* StartX,int* StartY,int* EndX,int* EndY,int minDst)
 {	
 	std::vector<Vec3f> circles;
-	HoughCircles(FullImage, circles, HOUGH_GRADIENT, 1.25, FullImage.rows/4, 105,33, 5,40);
+	HoughCircles(FullImage, circles, HOUGH_GRADIENT, 1.25, FullImage.rows/4, 105,33, 5,45);
 	int i=0;
 	sort(circles.begin(), circles.end(), [](const Vec3f& lhs, const Vec3f& rhs) {return cvRound(lhs[2]) > cvRound(rhs[2]); });
 	
+	if (circles.size() < 2)
+	{
+		return false;
+	}
 	for (i=0; i < 2; i++)
 	{	
 		
@@ -151,7 +157,7 @@ bool FindCircle(Mat& FullImage,int* StartX,int* StartY,int* EndX,int* EndY,int m
 		int radius = cvRound(circles[i][2]);
 		if (i == 0)
 		{
-			*StartX = center.x+radius;
+			*StartX = center.x +radius;
 			*StartY = center.y;
 		}
 		if (i == 1)
@@ -160,9 +166,9 @@ bool FindCircle(Mat& FullImage,int* StartX,int* StartY,int* EndX,int* EndY,int m
 			*EndY = center.y;
 		}
 
-		circle(FullImage, center, 3, Scalar(0, 255, 0), -1, 8, 0);
+		//circle(FullImage, center, 3, Scalar(0, 255, 0), -1, 8, 0);
 
-		circle(FullImage, center, radius, Scalar(255, 0, 255), 3, 8, 0);
+		circle(FullImage, center, radius-5, Scalar(255, 0, 255), 8, 8, 0);
 
 		
 	}
@@ -314,9 +320,111 @@ void RemoveShadow(Mat* image)
 	* image = result_norm;
 	//return result_norm;
 }
+
+
+bool MazeSolverFunction(std::string& UserInputImage)
+{
+	const char* ImageName = UserInputImage.c_str();//argv[1];
+	Mat image;
+	Mat imageClone;
+	int Paththreshold = 4;
+	image = imread(ImageName, IMREAD_COLOR);
+	{
+		if (!image.data)
+		{
+			printf("No image data \n");
+			return false;
+		}
+		imageClone = image.clone();
+		RemoveShadow(&image);
+
+		Mat gray_image;
+
+		resize(image, gray_image, cv::Size(image.cols * 0.6, image.rows * 0.6), 0, 0, INTER_LINEAR);
+		resize(imageClone, imageClone, cv::Size(image.cols * 0.6, image.rows * 0.6), 0, 0, INTER_LINEAR);
+		cvtColor(gray_image, gray_image, COLOR_BGR2GRAY);
+		int StartX, StartY, EndX, EndY;
+
+		if (!FindCircle(gray_image, &StartX, &StartY, &EndX, &EndY, gray_image.rows / Paththreshold))
+		{
+			std::cout << "Circle Not Found" << std::endl;
+			return false;
+		}
+		gray_image = gray_image > 200;
+#ifdef DEBUG
+		imshow("gray", gray_image);
+		waitKey(0);
+#endif // DEBUG
+
+
+
+		//continue;
+		ImageMap IM = PartitionImage(gray_image, gray_image.cols / Paththreshold, gray_image.rows / Paththreshold, StartX, StartY, EndX, EndY);
+		if (!IM.StartEndTile[0].CoorValid || !IM.StartEndTile[1].CoorValid)
+		{
+			std::cout << " Can't find Start or End point" << std::endl;
+			return false;
+		}
+		//threshold(gray_image, gray_image, 128, 255, THRESH_BINARY);
+#ifdef DEBUG
+		imshow("Binary", gray_image);
+		waitKey(0);
+#endif // DEBUG
+
+		//continue;
+		AStar AS;
+
+		AS.InitAStar(IM.Height, IM.width, IM.StartEndTile[1].TileY, IM.StartEndTile[1].TileX, IM.StartEndTile[0].TileY, IM.StartEndTile[0].TileX);
+
+		std::cout << "Projecting Nodes to image..." << std::endl;
+
+		for (const Tile& tile : IM.ObstacleTile)
+		{
+
+			AS.SetObstacleNodes(tile.TileY, tile.TileX);
+		}
+		auto start = std::chrono::high_resolution_clock::now();
+		bool finished = AS.Solve_AStar();
+		auto stop = std::chrono::high_resolution_clock::now();
+		auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+		std::cout << "Solving Time: " << duration.count() << " microseconds" << std::endl;
+
+		std::string PathFound = finished ? "Path Found!" : "Path not found";
+		std::cout << PathFound << std::endl;
+		AStar::Node* CurrentNode = AS.nodeEnd;
+		Point tempPoint(-1, -1);
+		while (CurrentNode->parent != nullptr)
+		{
+			Point p(CurrentNode->y * Paththreshold, CurrentNode->x * Paththreshold);
+			if (tempPoint.x != -1 && tempPoint.y != -1)
+			{
+				line(imageClone, tempPoint, p, Scalar(0, 0, 255), 2, LINE_AA);
+			}
+			//image.at<Vec3b>(CurrentNode->x * Paththreshold, CurrentNode->y * Paththreshold) = Vec3b(0, 0, 255);
+			CurrentNode = CurrentNode->parent;
+			tempPoint.x = CurrentNode->y * Paththreshold;
+			tempPoint.y = CurrentNode->x * Paththreshold;
+		}
+
+	}
+	UserInputImage.erase(UserInputImage.end() - 4, UserInputImage.end());
+	std::string NewImageString=	UserInputImage+ std::string("_result") + std::string(".jpg");
+	imwrite(NewImageString, imageClone);
+
+	std::cout << "Saved as " <<NewImageString <<std::endl;
+	namedWindow("Display", WINDOW_AUTOSIZE);
+	imshow("Display", imageClone);
+	waitKey(0);
+}
 int main(int argc,char** argv)
 {	
-	
+	std::string arg1;
+	if (argc >= 2)
+	{
+		arg1 = std::string(argv[1]);
+		MazeSolverFunction(arg1);
+		return 0;
+	}
 	std::string UserInput="";
 	while ( true)
 	{	
@@ -343,94 +451,8 @@ int main(int argc,char** argv)
 			std::string UserInputImage;
 
 			std::cin >> UserInputImage;
-			const char* ImageName = UserInputImage.c_str();//argv[1];
-			Mat image;
-			Mat imageClone;
-			int Paththreshold = 4;
-			image = imread(ImageName, IMREAD_COLOR);
-			{
-				if (!image.data)
-				{
-					printf("No image data \n");
-					continue;
-				}
-				imageClone = image.clone();
-				RemoveShadow(&image);
-				
-				Mat gray_image;
-				
-				resize(image, gray_image, cv::Size(image.cols * 1, image.rows * 1), 0, 0, INTER_LINEAR);
-				cvtColor(gray_image, gray_image, COLOR_BGR2GRAY);
-				int StartX, StartY, EndX, EndY;
-				
-				if (!FindCircle(gray_image, &StartX, &StartY, &EndX, &EndY, image.rows / Paththreshold))
-				{
-					std::cout << "Circle Not Found" << std::endl;
-					continue;
-				}
-				gray_image = gray_image > 200;
-#ifdef DEBUG
-				imshow("gray", gray_image);
-				waitKey(0);
-#endif // DEBUG
-				
-				
-				
-				//continue;
-				ImageMap IM = PartitionImage(gray_image, image.cols / Paththreshold, image.rows / Paththreshold,StartX,StartY,EndX,EndY);
-				if (!IM.StartEndTile[0].CoorValid || !IM.StartEndTile[1].CoorValid)
-				{
-					std::cout << " Can't find Start or End point" << std::endl;
-					continue;
-				}
-				//threshold(gray_image, gray_image, 128, 255, THRESH_BINARY);
-#ifdef DEBUG
-				imshow("Binary", gray_image);
-				waitKey(0);
-#endif // DEBUG
-				
-				//continue;
-				AStar AS;
-				
-				AS.InitAStar(IM.Height, IM.width, IM.StartEndTile[1].TileY, IM.StartEndTile[1].TileX, IM.StartEndTile[0].TileY, IM.StartEndTile[0].TileX);
-				
-				std::cout << "Projecting Nodes to image..." << std::endl;
-				
-				for (const Tile& tile : IM.ObstacleTile)
-				{	
-					
-					AS.SetObstacleNodes(tile.TileY, tile.TileX);
-				}
-				auto start = std::chrono::high_resolution_clock::now();
-				bool finished = AS.Solve_AStar();
-				auto stop = std::chrono::high_resolution_clock::now();
-				auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-				std::cout << "Solving Time: " << duration.count()<< " microseconds" << std::endl;
-
-				std::string PathFound = finished ? "Path Found!" : "Path not found";
-				std::cout <<  PathFound << std::endl;
-				AStar::Node* CurrentNode = AS.nodeEnd;
-				Point tempPoint(-1,-1);
-				while (CurrentNode->parent != nullptr)
-				{	
-					Point p(CurrentNode->y * Paththreshold, CurrentNode->x * Paththreshold);
-					if (tempPoint.x != -1 && tempPoint.y != -1)
-					{
-						line(imageClone, tempPoint, p, Scalar(0, 0, 255), 2, LINE_AA);
-					}
-					//image.at<Vec3b>(CurrentNode->x * Paththreshold, CurrentNode->y * Paththreshold) = Vec3b(0, 0, 255);
-					CurrentNode = CurrentNode->parent;
-					tempPoint.x = CurrentNode->y * Paththreshold;
-					tempPoint.y = CurrentNode->x * Paththreshold;
-				}
-
-			}
-			imwrite("result.jpg", imageClone);
-
-			std::cout << "Saved as result.jpg" << std::endl;
-			namedWindow("Display", WINDOW_AUTOSIZE);
-			imshow("Display", imageClone);
-			waitKey(0);
+			MazeSolverFunction(UserInputImage);
+			
 			
 		}
 		else

@@ -23,7 +23,7 @@ public:
 
 	virtual ~GG()
 	{	
-		std::cout << "Deleted Window" << std::endl;
+		std::cout << "Destroyed Window" << std::endl;
 		delete this->window;
 	}
 
